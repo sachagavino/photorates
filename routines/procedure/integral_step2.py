@@ -64,7 +64,7 @@ def i_isrf(files, wavelength):
     i_isrf = pd.read_table('../radiation_fields/%s.txt' % files, sep=" ", comment='#', header=None)
     name_field = ['wv', 'field'] # column names: wavelength(wv), radiation field(field)
     i_isrf.columns = name_field 
-    dlambda = (i_isrf['wv'][11] - i_isrf['wv'][10]) #dlambda is constant. Will give the range (lambda, lambda + dlambda) in each we compute the photorate
+    dlambda = (i_isrf['wv'][11] - i_isrf['wv'][10]) #dlambda is constant. Will give the range (lambda, lambda + dlambda) in which we compute the photorate
     field = i_isrf.loc[i_isrf['wv'] == wavelength, 'field'].iloc[0]
     return dlambda, field
 #---------------------------------------------
@@ -124,60 +124,60 @@ if __name__ == "__main__":
     dust_opacity_frame=pd.DataFrame()
     #---------------------------
     
-    #for radius in radii:
-    dz = z = Q = 0
-    tau_m = tau_d = structure = dust_density = 0
+    for radius in radii:
+        dz = z = Q = 0
+        tau_m = tau_d = structure = dust_density = 0
 
-    #-----extract physical structures and dz-----   
-    structure = pd.read_table('../MODEL/gas/%s.txt' % radius, sep=" ")
-    z = structure['z'].values #altitudes in AU.
-    dz = (structure['z'][10] - structure['z'][11])*au.to('cm').value # dz is constant along the vertical, so we only need to compute it at one arbitrary height.
-    #--------------------------------------------
+        #-----extract physical structures and dz-----   
+        structure = pd.read_table('../MODEL/gas/%s.txt' % radius, sep=" ")
+        z = structure['z'].values #altitudes in AU.
+        dz = (structure['z'][10] - structure['z'][11])*au.to('cm').value # dz is constant along the vertical, so we only need to compute it at one arbitrary height.
+        #--------------------------------------------
 
-    #-----extract dust densities-----
-    dust_density = pd.read_table('../MODEL/%s/dust_density.in' % radius, sep=" ")
-    #print(dust['size1'])
-    #--------------------------------
+        #-----extract dust densities-----
+        dust_density = pd.read_table('../MODEL/%s/dust_density.in' % radius, sep=" ")
+        #print(dust['size1'])
+        #--------------------------------
 
-    #-----extract dust sizes-----
-    size_table = pd.read_table('../MODEL/%s/sizes.in' % radius, sep=" ", index_col=0, names=['value'])
-    #print(size.loc['size1'].value)
-    dust_list = size_table.index.values
-    dust_sizes = size_table['value'].values
-    #----------------------------
+        #-----extract dust sizes-----
+        size_table = pd.read_table('../MODEL/%s/sizes.in' % radius, sep=" ", index_col=0, names=['value'])
+        #print(size.loc['size1'].value)
+        dust_list = size_table.index.values
+        dust_sizes = size_table['value'].values
+        #----------------------------
 
-    #molecules
-    for species in X:
-        #-----extract cross-sections values-----
-        photoabs, photodiss, photoion = cross_sections(species, wavelength)
-        #---------------------------------------
+        #molecules
+        for species in X:
+            #-----extract cross-sections values-----
+            photoabs, photodiss, photoion = cross_sections(species, wavelength)
+            #---------------------------------------
 
-        #-----get gas opacity in each coordinates from 4H to midplane:-----
-        tau_m += np.exp(-molecular_opacity(species, structure, photoabs, radius, dz))
-        #------------------------------------------------------------------
-
-    #-----stack opacities of each radius to dataframe-----
-    gas_opacity_frame = pd.concat([gas_opacity_frame, tau_m], axis=1)
-    #-----------------------------------------------------
-
-    #dust
-    for size in dust_list:
-        #-----get size and geometrical dust cross-sections-----
-        a = size_table.loc[size].value
-        dust_cs = a**2
-        #------------------------------------------------------
-
-        #-----get extinction efficiency-----
-        Q = q_ext(1., wavelength, a, 4.)
-        #-----------------------------------
-
-        #-----get dust opacity in each coordinates from 4H to midplane:-----
-        tau_d += np.exp(-dust_opacity(size, radius, Q, a, dz))
-        #-------------------------------------------------------------------
+            #-----get gas opacity in each coordinates from 4H to midplane:-----
+            tau_m += np.exp(-molecular_opacity(species, structure, photoabs, radius, dz))
+            #------------------------------------------------------------------
 
         #-----stack opacities of each radius to dataframe-----
-        dust_opacity_frame = pd.concat([dust_opacity_frame, tau_d], axis=1)
+        gas_opacity_frame = pd.concat([gas_opacity_frame, tau_m], axis=1)
         #-----------------------------------------------------
+
+        #dust
+        for size in dust_list:
+            #-----get size and geometrical dust cross-sections-----
+            a = size_table.loc[size].value
+            dust_cs = a**2
+            #------------------------------------------------------
+
+            #-----get extinction efficiency-----
+            Q = q_ext(1., wavelength, a, 4.)
+            #-----------------------------------
+
+            #-----get dust opacity in each coordinates from 4H to midplane:-----
+            tau_d += np.exp(-dust_opacity(size, radius, Q, a, dz))
+            #-------------------------------------------------------------------
+
+            #-----stack opacities of each radius to dataframe-----
+            dust_opacity_frame = pd.concat([dust_opacity_frame, tau_d], axis=1)
+            #-----------------------------------------------------
     
     #-----sum of both opacities-----
     total_opacity_frame = gas_opacity_frame.add(dust_opacity_frame, fill_value=0)
